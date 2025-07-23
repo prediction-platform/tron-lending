@@ -14,7 +14,7 @@ services:
       - pgdata:/var/lib/postgresql/data
 
   app:
-    build: .
+    image: ghcr.io/prediction-platform/tron-lending:sha-445c1a9
     container_name: lending-trx-app
     depends_on:
       - postgres

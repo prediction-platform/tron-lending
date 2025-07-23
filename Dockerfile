@@ -10,15 +10,15 @@ RUN go mod download
 # 拷贝源代码
 COPY . .
 
-# 构建可执行文件
-RUN go build -o app main.go
+# 静态编译，避免 GLIBC 依赖问题
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o app main.go
 
-# 使用更小的基础镜像运行
-FROM debian:bullseye-slim
+# 使用 alpine 镜像，更轻量
+FROM alpine:latest
 WORKDIR /app
 
 # 安装 ca-certificates 以支持 https
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apk --no-cache add ca-certificates
 
 # 拷贝编译好的二进制文件
 COPY --from=builder /app/app .
@@ -27,4 +27,4 @@ COPY --from=builder /app/app .
 ENV PG_DSN="postgres://postgres:password@localhost:5432/postgres?sslmode=disable"
 
 # 启动应用
-CMD ["./app"] 
+CMD ["./app"]
