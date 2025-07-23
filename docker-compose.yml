@@ -14,17 +14,19 @@ services:
       - pgdata:/var/lib/postgresql/data
 
   app:
-    image: ghcr.io/prediction-platform/tron-lending:sha-445c1a9
+    image: lending-trx:latest
     container_name: lending-trx-app
     depends_on:
       - postgres
+    volumes:
+      - ./logs:/app/logs
     environment:
       PG_DSN: "postgres://postgres:password@postgres:5432/postgres?sslmode=disable"
-      WEBHOOK_AUTH_TOKEN: "mysecrettoken"
+      WEBHOOK_AUTH_TOKEN: "qnsec_ZDY2M2Y4NjctNDViZi00YzAzLTgxZDktYzBhMmExNmQzMGU3"
       PORT: "8080"
     restart: unless-stopped
     ports:
-      - "28080:8080"
+      - "8080:8080"
 
 volumes:
   pgdata: 
