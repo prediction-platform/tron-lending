@@ -3,6 +3,7 @@ package webhook
 import (
 	"context"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"io"
 
 	"lending-trx/internal/db"
+	"lending-trx/internal/tron"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -182,6 +184,8 @@ func ConvertToWebhookDataModelSlice(dataList []WebhookData) []*db.WebhookDataMod
 // RegisterRoutes 注册 webhook 路由
 func RegisterRoutes(r *gin.Engine, ctx context.Context, pool *pgxpool.Pool, log *xlog.XLog) {
 	l := log.WithField("module", "webhook")
+
+	// Webhook 处理路由
 	r.POST("/webhook", AuthMiddleware(), func(c *gin.Context) {
 
 		/*
@@ -227,17 +231,17 @@ func RegisterRoutes(r *gin.Engine, ctx context.Context, pool *pgxpool.Pool, log 
 		// 读取请求体
 		body, err := io.ReadAll(c.Request.Body)
 		if err != nil {
-			l.Error("读取请求体失败", err)
+			l.Error("Failed to read request body", err)
 			c.JSON(http.StatusBadRequest, gin.H{"error": "read body failed"})
 			return
 		}
 		// 打印请求体内容
-		l.Info("webhook 请求体", string(body))
+		l.Info("Webhook request body", string(body))
 
 		// 使用工具函数解析webhook数据
 		webhookDataList, err := ParseWebhookData(body)
 		if err != nil {
-			l.Error("解析webhook数据失败", err)
+			l.Error("Failed to parse webhook data", err)
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid json format"})
 			return
 		}
@@ -246,11 +250,50 @@ func RegisterRoutes(r *gin.Engine, ctx context.Context, pool *pgxpool.Pool, log 
 		webhookDataModels := ConvertToWebhookDataModelSlice(webhookDataList)
 		err = db.BatchInsertWebhookData(ctx, pool, webhookDataModels)
 		if err != nil {
-			l.Error("批量插入数据库失败", err)
+			l.Error("Failed to batch insert into database", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "db error"})
 			return
 		}
 
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "inserted_count": len(webhookDataList)})
+	})
+
+	// 查询委托方账户信息的路由
+	r.GET("/api/delegation-account", func(c *gin.Context) {
+		// 从环境变量获取委托方地址
+		delegationFromAddress := os.Getenv("DELEGATION_FROM_ADDRESS")
+		if delegationFromAddress == "" {
+			l.Error("Environment variable DELEGATION_FROM_ADDRESS not set")
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "delegation address not configured"})
+			return
+		}
+
+		// 创建 Tron 客户端
+		baseURL := os.Getenv("TRON_API_BASE_URL")
+		if baseURL == "" {
+			baseURL = "https://api.trongrid.io"
+		}
+		apiKey := os.Getenv("TRON_API_KEY")
+		tronClient := tron.NewTronClient(baseURL, apiKey)
+
+		// 获取账户信息
+		accountInfo, err := tronClient.GetAccountInfo(ctx, delegationFromAddress)
+		if err != nil {
+			l.Error("Failed to get delegation account info", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get account info"})
+			return
+		}
+
+		// 返回账户信息
+		c.JSON(http.StatusOK, gin.H{
+			"status": "ok",
+			"data": gin.H{
+				"address":      accountInfo.Address,
+				"balance":      accountInfo.Balance,
+				"energy":       accountInfo.Energy,
+				"energy_limit": accountInfo.EnergyLimit,
+				"energy_used":  accountInfo.EnergyUsed,
+			},
+		})
 	})
 }

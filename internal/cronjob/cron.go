@@ -52,11 +52,11 @@ func (c *CronJob) start() {
 	cronScheduler := cron.New()
 	_, err := cronScheduler.AddFunc("@every 30s", c.processWebhookData)
 	if err != nil {
-		c.log.Error("添加定时任务失败", err)
+		c.log.Error("Failed to add cron job", err)
 		return
 	}
 
-	c.log.Info("定时任务已启动，每30秒执行一次")
+	c.log.Info("Cron job started, running every 30 seconds")
 	go cronScheduler.Run()
 }
 
@@ -319,25 +319,24 @@ func (c *CronJob) calculateDelegationAmount(value string, availableEnergy string
 		return "0"
 	}
 
-	// 业务逻辑：基于交易金额设定固定基数计算委托数量
-	// 金额越大，委托的能量应该越多
-	var delegationBase int64 = 15000
-	var delegationMultiplier float64
-
-	// 基于 SUN 单位的阈值判断
+	// 业务逻辑：基于交易金额计算委托数量
 	// 1 TRX = 1,000,000 SUN
-	// 100,000 TRX = 100,000,000,000 SUN
-	// 1,000,000 TRX = 1,000,000,000,000 SUN
-	if valueInt > 1000000000000 { // 大于 1,000,000 TRX (1,000,000,000,000 SUN)
-		delegationMultiplier = 0.5 // 50% 系数
-	} else if valueInt > 100000000000 { // 大于 100,000 TRX (100,000,000,000 SUN)
-		delegationMultiplier = 0.25 // 25% 系数
-	} else {
-		delegationMultiplier = 0.1 // 10% 系数
-	}
+	var delegationBase int64 = 65000
+	var delegationAmount int64
 
-	// 计算委托数量：基数 + (交易金额 * 系数)
-	delegationAmount := delegationBase + int64(float64(valueInt)*delegationMultiplier/10000) // 除以 10,000 来调整比例
+	// 将 SUN 转换为 TRX 进行计算
+	trxValue := valueInt / 1000000 // 1 TRX = 1,000,000 SUN
+
+	if trxValue >= 1 {
+		// 委托数量 = TRX数量 * delegationBase，最多不超过 2*delegationBase
+		delegationAmount = trxValue * delegationBase
+		if delegationAmount > 2*delegationBase {
+			delegationAmount = 2 * delegationBase
+		}
+	} else {
+		// 如果小于 1 TRX，不进行委托
+		delegationAmount = 0
+	}
 
 	// 确保不超过可用能量
 	if delegationAmount > energyInt {

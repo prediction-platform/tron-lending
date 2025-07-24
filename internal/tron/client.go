@@ -201,7 +201,7 @@ func (c *TronClient) GetTransactionInfo(ctx context.Context, txID string) (map[s
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		return nil, fmt.Errorf("创建请求失败: %w", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	if c.apiKey != "" {
@@ -210,22 +210,22 @@ func (c *TronClient) GetTransactionInfo(ctx context.Context, txID string) (map[s
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("请求失败: %w", err)
+		return nil, fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("读取响应失败: %w", err)
+		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API请求失败，状态码: %d, 响应: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("API request failed, status code: %d, response: %s", resp.StatusCode, string(body))
 	}
 
 	var txInfo map[string]interface{}
 	if err := json.Unmarshal(body, &txInfo); err != nil {
-		return nil, fmt.Errorf("解析响应失败: %w", err)
+		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
 
 	return txInfo, nil
