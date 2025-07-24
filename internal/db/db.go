@@ -54,9 +54,9 @@ CREATE TABLE IF NOT EXISTS logs (
 
 // InitDB 连接数据库并初始化表，返回连接池
 func InitDB(ctx context.Context) (*pgxpool.Pool, error) {
-	dsn := os.Getenv("PG_DSN")
+	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		dsn = "postgres://postgres:password@localhost:5432/postgres?sslmode=disable"
+		dsn = "postgresql://postgres:password@localhost:5432/lending_trx?sslmode=disable"
 	}
 	pool, err := pgxpool.New(ctx, dsn)
 	if err != nil {

@@ -7,26 +7,56 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
-      POSTGRES_DB: postgres
+      POSTGRES_DB: lending_trx
     ports:
-      - "55432:5432"
+      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
 
-  app:
-    image: lending-trx:latest
-    container_name: lending-trx-app
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lending-trx-server
     depends_on:
       - postgres
     volumes:
       - ./logs:/app/logs
     environment:
-      PG_DSN: "postgres://postgres:password@postgres:5432/postgres?sslmode=disable"
-      WEBHOOK_AUTH_TOKEN: "qnsec_ZDY2M2Y4NjctNDViZi00YzAzLTgxZDktYzBhMmExNmQzMGU3"
+      DATABASE_URL: "postgresql://postgres:password@postgres:5432/lending_trx?sslmode=disable"
+      TRON_API_URL: "https://api.trongrid.io"
+      TRON_API_KEY: "${TRON_API_KEY}"
+      DELEGATION_FROM_ADDRESS: "${DELEGATION_FROM_ADDRESS}"
       PORT: "8080"
+      LOG_LEVEL: "info"
+      CRON_SCHEDULE: "@every 30s"
+      DELEGATION_BASE: "15000"
+      MIN_DELEGATION_AMOUNT: "1000"
     restart: unless-stopped
     ports:
       - "8080:8080"
+    command: ["./lending-trx", "server"]
+
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lending-trx-bot
+    depends_on:
+      - server
+    volumes:
+      - ./logs:/app/logs
+    environment:
+      TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN}"
+      API_BASE_URL: "http://server:8080"
+      MONITOR_INTERVAL_MINUTES: "5"
+      HTTP_TIMEOUT: "30"
+      LONG_POLLING_TIMEOUT: "30"
+      MAX_RETRIES: "3"
+      RETRY_DELAY: "5"
+    restart: unless-stopped
+    command: ["./lending-trx", "bot"]
 
 volumes:
   pgdata: 

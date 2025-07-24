@@ -269,7 +269,7 @@ func RegisterRoutes(r *gin.Engine, ctx context.Context, pool *pgxpool.Pool, log 
 		}
 
 		// 创建 Tron 客户端
-		baseURL := os.Getenv("TRON_API_BASE_URL")
+		baseURL := os.Getenv("TRON_API_URL")
 		if baseURL == "" {
 			baseURL = "https://api.trongrid.io"
 		}

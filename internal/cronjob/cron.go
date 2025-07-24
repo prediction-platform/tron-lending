@@ -24,7 +24,7 @@ type CronJob struct {
 // NewCronJob 创建新的定时任务实例
 func NewCronJob(ctx context.Context, pool *pgxpool.Pool, log *xlog.XLog) *CronJob {
 	// 从环境变量获取 Tron API 配置
-	baseURL := os.Getenv("TRON_API_BASE_URL")
+	baseURL := os.Getenv("TRON_API_URL")
 	if baseURL == "" {
 		baseURL = "https://api.trongrid.io"
 	}
@@ -50,13 +50,20 @@ func StartCron(ctx context.Context, pool *pgxpool.Pool, log *xlog.XLog) {
 // start 启动定时任务
 func (c *CronJob) start() {
 	cronScheduler := cron.New()
-	_, err := cronScheduler.AddFunc("@every 30s", c.processWebhookData)
+
+	// 从环境变量获取定时任务配置
+	cronSchedule := os.Getenv("CRON_SCHEDULE")
+	if cronSchedule == "" {
+		cronSchedule = "@every 30s"
+	}
+
+	_, err := cronScheduler.AddFunc(cronSchedule, c.processWebhookData)
 	if err != nil {
 		c.log.Error("Failed to add cron job", err)
 		return
 	}
 
-	c.log.Info("Cron job started, running every 30 seconds")
+	c.log.Info("Cron job started", "schedule", cronSchedule)
 	go cronScheduler.Run()
 }
 
@@ -214,7 +221,7 @@ func (c *CronJob) executeEnergyDelegation(data *db.WebhookDataModel) error {
 	// 3. 构建委托请求
 	delegationReq := &tron.EnergyDelegationRequest{
 		FromAddress: delegationFromAddress, // 使用统一的委托方地址
-		ToAddress:   data.FromAddress,
+		ToAddress:   data.FromAddress,      // 委托给交易发起方
 		Amount:      delegationAmount,
 		TxHash:      data.TxHash,
 		BlockHeight: data.BlockHeight,
@@ -283,7 +290,7 @@ func (c *CronJob) cancelEnergyDelegation(data *db.WebhookDataModel) error {
 	// 2. 构建取消委托请求
 	cancelReq := &tron.CancelDelegationRequest{
 		FromAddress:  delegationFromAddress, // 使用统一的委托方地址
-		ToAddress:    data.FromAddress,
+		ToAddress:    data.FromAddress,      // 取消委托给交易发起方
 		OriginalTxID: originalTxID,
 		TxHash:       data.TxHash,
 	}
@@ -319,22 +326,42 @@ func (c *CronJob) calculateDelegationAmount(value string, availableEnergy string
 		return "0"
 	}
 
+	// 从环境变量获取委托配置
+	delegationBaseStr := os.Getenv("DELEGATION_BASE")
+	if delegationBaseStr == "" {
+		delegationBaseStr = "65000"
+	}
+	delegationBase, err := strconv.ParseInt(delegationBaseStr, 10, 64)
+	if err != nil {
+		c.log.Error("Failed to parse DELEGATION_BASE", err, "value", delegationBaseStr)
+		delegationBase = 65000
+	}
+
+	minDelegationStr := os.Getenv("MIN_DELEGATION_AMOUNT")
+	if minDelegationStr == "" {
+		minDelegationStr = "1000000"
+	}
+	minDelegation, err := strconv.ParseInt(minDelegationStr, 10, 64)
+	if err != nil {
+		c.log.Error("Failed to parse MIN_DELEGATION_AMOUNT", err, "value", minDelegationStr)
+		minDelegation = 1000000
+	}
+
 	// 业务逻辑：基于交易金额计算委托数量
 	// 1 TRX = 1,000,000 SUN
-	var delegationBase int64 = 65000
 	var delegationAmount int64
 
 	// 将 SUN 转换为 TRX 进行计算
 	trxValue := valueInt / 1000000 // 1 TRX = 1,000,000 SUN
 
-	if trxValue >= 1 {
-		// 委托数量 = TRX数量 * delegationBase，最多不超过 2*delegationBase
-		delegationAmount = trxValue * delegationBase
-		if delegationAmount > 2*delegationBase {
-			delegationAmount = 2 * delegationBase
-		}
+	if trxValue == 1 {
+		// 1 TRX → 委托 delegationBase
+		delegationAmount = delegationBase
+	} else if trxValue == 2 {
+		// 2 TRX → 委托 2 * delegationBase
+		delegationAmount = 2 * delegationBase
 	} else {
-		// 如果小于 1 TRX，不进行委托
+		// 其他情况，不进行委托
 		delegationAmount = 0
 	}
 
@@ -344,7 +371,6 @@ func (c *CronJob) calculateDelegationAmount(value string, availableEnergy string
 	}
 
 	// 确保最小委托数量
-	minDelegation := int64(1000) // 最小委托1000能量
 	if delegationAmount < minDelegation {
 		delegationAmount = 0
 	}
