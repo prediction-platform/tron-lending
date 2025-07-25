@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 	"github.com/spf13/cobra"
 	"github.com/sunjiangjun/xlog"
 
@@ -34,6 +35,11 @@ func init() {
 }
 
 func runServer(cmd *cobra.Command, args []string) {
+	// 加载环境变量文件
+	if err := godotenv.Load(); err != nil {
+		log.Println("⚠️ 未找到.env文件，使用系统环境变量")
+	}
+
 	fmt.Println("🚀 启动TRX委托服务...")
 
 	ctx := context.Background()

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 	"github.com/sunjiangjun/xlog"
 
 	"lending-trx/internal/cronjob"
@@ -16,6 +17,11 @@ import (
 )
 
 func main() {
+	// 加载环境变量文件
+	if err := godotenv.Load(); err != nil {
+		log.Println("⚠️ 未找到.env文件，使用系统环境变量")
+	}
+
 	fmt.Println("🚀 启动TRX委托服务...")
 
 	ctx := context.Background()

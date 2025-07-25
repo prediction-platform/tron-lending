@@ -15,9 +15,7 @@ services:
     restart: unless-stopped
 
   server:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/prediction-platform/tron-lending:main
     container_name: lending-trx-server
     depends_on:
       - postgres
@@ -33,15 +31,14 @@ services:
       CRON_SCHEDULE: "@every 30s"
       DELEGATION_BASE: "15000"
       MIN_DELEGATION_AMOUNT: "1000"
+      WEBHOOK_AUTH_TOKEN: "${WEBHOOK_AUTH_TOKEN}"
     restart: unless-stopped
     ports:
       - "8080:8080"
     command: ["./lending-trx", "server"]
 
   bot:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/prediction-platform/tron-lending:main
     container_name: lending-trx-bot
     depends_on:
       - server
