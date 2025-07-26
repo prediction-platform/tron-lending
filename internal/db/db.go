@@ -33,7 +33,7 @@ const createWebhookTableSQL = `
 CREATE TABLE IF NOT EXISTS webhook_data (
   id SERIAL PRIMARY KEY,
   block_height BIGINT,
-  tx_hash VARCHAR(128),
+  tx_hash VARCHAR(128) UNIQUE,
   from_address VARCHAR(128),
   to_address VARCHAR(128),
   value NUMERIC(36,0),
@@ -124,7 +124,7 @@ func BatchInsertWebhookData(ctx context.Context, pool *pgxpool.Pool, data []*Web
 		valueArgs = append(valueArgs,
 			d.BlockHeight, d.TxHash, d.FromAddress, d.ToAddress, d.Value, d.BlockTime, d.ExpireTime, d.Status, time.Now())
 	}
-	query := "INSERT INTO webhook_data (block_height, tx_hash, from_address, to_address, value, block_time, expire_time, status, create_time) VALUES " + strings.Join(valueStrings, ",")
+	query := "INSERT INTO webhook_data (block_height, tx_hash, from_address, to_address, value, block_time, expire_time, status, create_time) VALUES " + strings.Join(valueStrings, ",") + " ON CONFLICT (tx_hash) DO NOTHING"
 	_, err := pool.Exec(ctx, query, valueArgs...)
 	return err
 }
@@ -196,14 +196,21 @@ func scanWebhookDataRows(rows pgx.Rows) ([]*WebhookDataModel, error) {
 
 	for rows.Next() {
 		var data WebhookDataModel
+		var createTime, updateTime time.Time
+
 		err := rows.Scan(
 			&data.ID, &data.BlockHeight, &data.TxHash, &data.FromAddress,
-			&data.ToAddress, &data.Value, &data.BlockTime, &data.CreateTime,
-			&data.UpdateTime, &data.ExpireTime, &data.Status, &data.OriginalTxID,
+			&data.ToAddress, &data.Value, &data.BlockTime, &createTime,
+			&updateTime, &data.ExpireTime, &data.Status, &data.OriginalTxID,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan data: %w", err)
 		}
+
+		// 将时间转换为字符串
+		data.CreateTime = createTime.Format("2006-01-02 15:04:05")
+		data.UpdateTime = updateTime.Format("2006-01-02 15:04:05")
+
 		result = append(result, &data)
 	}
 
