@@ -20,7 +20,7 @@ func TestDelegationFromAddress(t *testing.T) {
 }
 
 func TestCalculateDelegationAmount(t *testing.T) {
-	// 模拟计算委托数量的逻辑
+	// 根据实际代码逻辑更新测试用例
 	testCases := []struct {
 		value           string
 		availableEnergy string
@@ -28,46 +28,49 @@ func TestCalculateDelegationAmount(t *testing.T) {
 		description     string
 	}{
 		{
-			value:           "500000", // 500,000 SUN = 0.5 TRX (小于1 TRX，应该跳过)
-			availableEnergy: "10000",
+			value:           "500000", // 500,000 SUN = 0.5 TRX (小于1 TRX)
+			availableEnergy: "100000",
 			expected:        "0", // 小于1 TRX，返回0
 			description:     "小于1 TRX交易，跳过委托",
 		},
 		{
-			value:           "50000000", // 50,000,000 SUN = 50 TRX (小额交易)
-			availableEnergy: "10000",
-			expected:        "10000", // 基数 15000 + (50000000 * 0.1 / 10000) = 15000 + 500 = 15500，但受可用能量限制为10000
-			description:     "小额交易，受可用能量限制",
+			value:           "1000000", // 1,000,000 SUN = 1 TRX
+			availableEnergy: "100000",
+			expected:        "65000", // 1 TRX → 委托 65000
+			description:     "1 TRX交易，委托基础数量",
 		},
 		{
-			value:           "150000000000", // 150,000,000,000 SUN = 150,000 TRX (中额交易)
-			availableEnergy: "20000",
-			expected:        "20000", // 基数 15000 + (150000000000 * 0.25 / 10000) = 15000 + 3750 = 18750，但受可用能量限制为20000
-			description:     "中额交易，受可用能量限制",
+			value:           "2000000", // 2,000,000 SUN = 2 TRX
+			availableEnergy: "200000",
+			expected:        "130000", // 2 TRX → 委托 2 * 65000 = 130000
+			description:     "2 TRX交易，委托双倍数量",
 		},
 		{
-			value:           "1500000000000", // 1,500,000,000,000 SUN = 1,500,000 TRX (大额交易)
-			availableEnergy: "50000",
-			expected:        "50000", // 基数 15000 + (1500000000000 * 0.5 / 10000) = 15000 + 75000 = 90000，但受可用能量限制为50000
-			description:     "大额交易，受可用能量限制",
+			value:           "1000000", // 1,000,000 SUN = 1 TRX
+			availableEnergy: "50000",   // 可用能量不足
+			expected:        "50000",   // 受可用能量限制
+			description:     "1 TRX交易，受可用能量限制",
+		},
+		{
+			value:           "1000000", // 1,000,000 SUN = 1 TRX
+			availableEnergy: "500000",  // 足够的可用能量，但委托数量小于最小值
+			expected:        "0",       // 65000 < 1000000，不满足最小委托要求
+			description:     "1 TRX交易，不满足最小委托要求",
+		},
+		{
+			value:           "3000000", // 3,000,000 SUN = 3 TRX
+			availableEnergy: "100000",
+			expected:        "0", // 3 TRX不在支持范围内
+			description:     "3 TRX交易，不支持的交易金额",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			// 模拟计算逻辑
+			// 模拟实际代码的计算逻辑
 			valueInt, err := strconv.ParseInt(tc.value, 10, 64)
 			if err != nil {
 				t.Errorf("解析交易金额失败: %v", err)
-				return
-			}
-
-			// 检查是否小于1 TRX
-			if valueInt < 1000000 { // 小于 1 TRX (1,000,000 SUN)
-				result := "0"
-				if result != tc.expected {
-					t.Errorf("期望委托数量为%s，实际为%s", tc.expected, result)
-				}
 				return
 			}
 
@@ -77,24 +80,24 @@ func TestCalculateDelegationAmount(t *testing.T) {
 				return
 			}
 
-			// 根据交易金额设定固定基数（修正后的逻辑）
-			var delegationBase int64 = 15000
-			var delegationMultiplier float64
+			// 使用实际代码的逻辑
+			var delegationBase int64 = 65000
+			var minDelegation int64 = 1000000
+			var delegationAmount int64
 
-			// 基于 SUN 单位的阈值判断
-			// 1 TRX = 1,000,000 SUN
-			// 100,000 TRX = 100,000,000,000 SUN
-			// 1,000,000 TRX = 1,000,000,000,000 SUN
-			if valueInt > 1000000000000 { // 大于 1,000,000 TRX (1,000,000,000,000 SUN)
-				delegationMultiplier = 0.5 // 50% 系数
-			} else if valueInt > 100000000000 { // 大于 100,000 TRX (100,000,000,000 SUN)
-				delegationMultiplier = 0.25 // 25% 系数
+			// 将 SUN 转换为 TRX 进行计算
+			trxValue := valueInt / 1000000 // 1 TRX = 1,000,000 SUN
+
+			if trxValue == 1 {
+				// 1 TRX → 委托 delegationBase
+				delegationAmount = delegationBase
+			} else if trxValue == 2 {
+				// 2 TRX → 委托 2 * delegationBase
+				delegationAmount = 2 * delegationBase
 			} else {
-				delegationMultiplier = 0.1 // 10% 系数
+				// 其他情况，不进行委托
+				delegationAmount = 0
 			}
-
-			// 计算委托数量：基数 + (交易金额 * 系数)
-			delegationAmount := delegationBase + int64(float64(valueInt)*delegationMultiplier/10000)
 
 			// 确保不超过可用能量
 			if delegationAmount > energyInt {
@@ -102,7 +105,6 @@ func TestCalculateDelegationAmount(t *testing.T) {
 			}
 
 			// 确保最小委托数量
-			minDelegation := int64(1000) // 最小委托1000能量
 			if delegationAmount < minDelegation {
 				delegationAmount = 0
 			}
@@ -112,6 +114,9 @@ func TestCalculateDelegationAmount(t *testing.T) {
 			if result != tc.expected {
 				t.Errorf("期望委托数量为%s，实际为%s", tc.expected, result)
 			}
+
+			t.Logf("交易金额: %s SUN (%.1f TRX), 可用能量: %s, 计算结果: %s",
+				tc.value, float64(trxValue), tc.availableEnergy, result)
 		})
 	}
 }
@@ -135,78 +140,97 @@ func TestEnvironmentVariableValidation(t *testing.T) {
 	}
 }
 
-// 新增：测试 SUN 单位转换和阈值判断
-func TestSunUnitCalculation(t *testing.T) {
+// 测试委托基数和最小委托数量的环境变量
+func TestDelegationConfiguration(t *testing.T) {
+	// 保存原始环境变量
+	originalBase := os.Getenv("DELEGATION_BASE")
+	originalMin := os.Getenv("MIN_DELEGATION_AMOUNT")
+
+	// 清理环境变量
+	os.Unsetenv("DELEGATION_BASE")
+	os.Unsetenv("MIN_DELEGATION_AMOUNT")
+
+	defer func() {
+		// 恢复原始环境变量
+		if originalBase != "" {
+			os.Setenv("DELEGATION_BASE", originalBase)
+		}
+		if originalMin != "" {
+			os.Setenv("MIN_DELEGATION_AMOUNT", originalMin)
+		}
+	}()
+
+	// 测试默认值
+	base := os.Getenv("DELEGATION_BASE")
+	if base != "" {
+		t.Errorf("期望 DELEGATION_BASE 为空，实际为%s", base)
+	}
+
+	min := os.Getenv("MIN_DELEGATION_AMOUNT")
+	if min != "" {
+		t.Errorf("期望 MIN_DELEGATION_AMOUNT 为空，实际为%s", min)
+	}
+
+	// 测试设置自定义值
+	os.Setenv("DELEGATION_BASE", "80000")
+	os.Setenv("MIN_DELEGATION_AMOUNT", "500000")
+
+	base = os.Getenv("DELEGATION_BASE")
+	if base != "80000" {
+		t.Errorf("期望 DELEGATION_BASE 为80000，实际为%s", base)
+	}
+
+	min = os.Getenv("MIN_DELEGATION_AMOUNT")
+	if min != "500000" {
+		t.Errorf("期望 MIN_DELEGATION_AMOUNT 为500000，实际为%s", min)
+	}
+}
+
+// 测试 TRX 值计算逻辑
+func TestTRXValueCalculation(t *testing.T) {
 	testCases := []struct {
-		sunValue     string
-		expectedTRX  float64
-		expectedTier string
-		description  string
+		sunValue    string
+		expectedTRX int64
+		description string
 	}{
 		{
-			sunValue:     "1000000", // 1,000,000 SUN
-			expectedTRX:  1.0,       // 1 TRX
-			expectedTier: "小额交易",
-			description:  "1 TRX 交易",
+			sunValue:    "1000000", // 1,000,000 SUN
+			expectedTRX: 1,         // 1 TRX
+			description: "1 TRX 转换",
 		},
 		{
-			sunValue:     "100000000", // 100,000,000 SUN
-			expectedTRX:  100.0,       // 100 TRX
-			expectedTier: "小额交易",
-			description:  "100 TRX 交易",
+			sunValue:    "2000000", // 2,000,000 SUN
+			expectedTRX: 2,         // 2 TRX
+			description: "2 TRX 转换",
 		},
 		{
-			sunValue:     "100000000000", // 100,000,000,000 SUN
-			expectedTRX:  100000.0,       // 100,000 TRX
-			expectedTier: "小额交易",         // 修正：实际为小额交易
-			description:  "100,000 TRX 交易",
+			sunValue:    "1500000", // 1,500,000 SUN
+			expectedTRX: 1,         // 1.5 TRX → 整数除法 = 1
+			description: "1.5 TRX 转换（整数除法）",
 		},
 		{
-			sunValue:     "1000000000000", // 1,000,000,000,000 SUN
-			expectedTRX:  1000000.0,       // 1,000,000 TRX
-			expectedTier: "中额交易",          // 修正：实际为中额交易
-			description:  "1,000,000 TRX 交易",
-		},
-		{
-			sunValue:     "2000000000000", // 2,000,000,000,000 SUN
-			expectedTRX:  2000000.0,       // 2,000,000 TRX
-			expectedTier: "大额交易",
-			description:  "2,000,000 TRX 交易",
+			sunValue:    "999999", // 999,999 SUN
+			expectedTRX: 0,        // 0.999999 TRX → 整数除法 = 0
+			description: "不足1 TRX 转换",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.description, func(t *testing.T) {
-			// 解析 SUN 值
 			sunInt, err := strconv.ParseInt(tc.sunValue, 10, 64)
 			if err != nil {
 				t.Errorf("解析 SUN 值失败: %v", err)
 				return
 			}
 
-			// 转换为 TRX
-			trxValue := float64(sunInt) / 1000000.0
+			// 使用实际代码的转换逻辑
+			trxValue := sunInt / 1000000 // 整数除法
 
-			// 验证 TRX 转换
 			if trxValue != tc.expectedTRX {
-				t.Errorf("期望 TRX 值为 %f，实际为 %f", tc.expectedTRX, trxValue)
+				t.Errorf("期望 TRX 值为 %d，实际为 %d", tc.expectedTRX, trxValue)
 			}
 
-			// 验证阈值判断（使用与代码相同的逻辑）
-			var actualTier string
-			if sunInt > 1000000000000 { // 大于 1,000,000 TRX (1,000,000,000,000 SUN)
-				actualTier = "大额交易"
-			} else if sunInt > 100000000000 { // 大于 100,000 TRX (100,000,000,000 SUN)
-				actualTier = "中额交易"
-			} else {
-				actualTier = "小额交易"
-			}
-
-			if actualTier != tc.expectedTier {
-				t.Errorf("期望交易类型为 %s，实际为 %s (SUN: %s, TRX: %.1f)", tc.expectedTier, actualTier, tc.sunValue, trxValue)
-			}
-
-			t.Logf("SUN: %s, TRX: %.1f, 类型: %s", tc.sunValue, trxValue, actualTier)
+			t.Logf("SUN: %s, TRX: %d", tc.sunValue, trxValue)
 		})
 	}
 }

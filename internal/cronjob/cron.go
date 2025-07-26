@@ -122,7 +122,7 @@ func (c *CronJob) processPendingData(data []*db.WebhookDataModel) {
 		if err := db.UpdateWebhookStatusByID(c.ctx, c.pool, item.ID, 2); err != nil {
 			c.log.Error("Failed to update status", err, "id", item.ID)
 		} else {
-			c.log.Info("Status updated successfully", "id", item.ID, "status", 1)
+			c.log.Info("Status updated successfully", "id", item.ID, "status", 2)
 		}
 	}
 }
